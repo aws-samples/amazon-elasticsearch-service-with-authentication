@@ -4,4 +4,4 @@ Secure ElasticSearch with AD/LDAP based Authentication & Authorization
 
 ## License Summary
 
-This sample code is made available under the MIT license. 
+This sample code is made available under the BSD-2-Clause license. 
