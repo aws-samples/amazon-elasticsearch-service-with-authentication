@@ -1,0 +1,774 @@
+{
+  "AWSTemplateFormatVersion": "2010-09-09",
+  "Description": "This template will launch an AWS Elasticsearch Domain with Nginx Proxy for AD Authentication & Authorization. Pre-requisites: (1) Existing VPC with a Public subnet having route to Internet and route to an existing AD/LDAP server. (2) AD/LDAP Connection Details for the Proxy to verify incoming web requests.",
+  "Mappings": {
+    "RegionMap": {
+      "us-east-1": {
+        "AMI": "ami-4fffc834"
+      },
+      "us-east-2": {
+        "AMI": "ami-ea87a78f"
+      },
+      "us-west-2": {
+        "AMI": "ami-aa5ebdd2"
+      },
+      "us-west-1": {
+        "AMI": "ami-3a674d5a"
+      },
+      "eu-west-1": {
+        "AMI": "ami-ebd02392"
+      },
+      "eu-west-2": {
+        "AMI": "ami-489f8e2c"
+      },
+      "eu-central-1": {
+        "AMI": "ami-657bd20a"
+      },
+      "ca-central-1": {
+        "AMI": "ami-5ac17f3e"
+      },
+      "ap-southeast-1": {
+        "AMI": "ami-fdb8229e"
+      },
+      "ap-southeast-2": {
+        "AMI": "ami-30041c53"
+      },
+      "ap-northeast-1": {
+        "AMI": "ami-4af5022c"
+      },
+      "ap-northeast-2": {
+        "AMI": "ami-8663bae8"
+      },
+      "ap-south-1": {
+        "AMI": "ami-d7abd1b8"
+      },
+      "sa-east-1": {
+        "AMI": "ami-d27203be"
+      }
+    }
+  },
+  "Metadata": {
+		"AWS::CloudFormation::Interface": {
+			"ParameterGroups": [
+        {
+				"Label": {
+					"default": "Elasticsearch Domain Configuration"
+				},
+				"Parameters": [
+					"ESDomainName",
+					"ESDomainDataInstanceCount",
+          "ESDomainDataInstanceType",
+          "ESDomainDataInstanceVolume",
+          "ESDomainMasterInstanceCount",
+          "ESDomainMasterInstanceType",
+          "ESDomainAllowExplicitIndex"
+				]},
+      {
+				"Label": {
+					"default": "Network and Security Group Configuration"
+				},
+				"Parameters": [
+					"VpcId",
+					"VpcCIDR",
+          "OnPremisesCIDR",
+					"SSHCIDR"
+				]},
+        {
+				"Label": {
+					"default": "Nginx Reverse Proxy Configuration"
+				},
+				"Parameters": [
+					"KeyPairName",
+					"NginxServerPortHTTP",
+          "NginxServerPortHTTPS",
+					"InstanceType",
+          "PublicSubnet"
+				]},
+        {
+				"Label": {
+					"default": "AD/LDAP Configuration"
+				},
+				"Parameters": [
+					"LDAPServer",
+          "BindDN",
+					"BindPassword",
+          "BaseDN",
+          "GroupPrefix"
+				]}
+        ],
+			"ParameterLabels": {
+        "VpcId": {
+					"default": "VPC ID"
+				},
+        "KeyPairName": {
+					"default": "Key Pair for SSH Access"
+				},
+        "InstanceType": {
+					"default": "Instance Type for Proxy"
+				},
+        "PublicSubnet": {
+					"default": "Public Subnet"
+				},
+        "GroupPrefix": {
+					"default": "LDAP/AD Group Prefix"
+				},
+        "LDAPServer": {
+					"default": "LDAP/AD Server"
+				},
+        "BindPassword": {
+					"default": "LDAP/AD Bind Password"
+				},
+        "BindDN": {
+					"default": "LDAP/AD Bind DN"
+				},
+        "BaseDN": {
+					"default": "LDAP/AD Base DN"
+				},
+        "OnPremisesCIDR": {
+					"default": "On Premises/Co-Loc CIDR"
+				},
+        "VpcCIDR": {
+					"default": "VPC CIDR"
+				},
+        "SSHCIDR": {
+					"default": "SSH CIDR"
+				},
+        "ESDomainName": {
+					"default": "ES Domain Name"
+				},
+        "ESDomainDataInstanceCount": {
+					"default": "Number of Data Nodes"
+				},
+        "ESDomainDataInstanceVolume": {
+					"default": "Volume Size Per Node"
+				},
+        "ESDomainDataInstanceType": {
+					"default": "Instance Type for Data Nodes"
+				},
+        "ESDomainMasterInstanceCount": {
+					"default": "Number of Master Nodes"
+				},
+        "ESDomainMasterInstanceType": {
+					"default": "Instance Type for Master Nodes"
+				},
+        "ESDomainAllowExplicitIndex":{
+          "default": "Allow Explicit Index in Request Body"
+        }
+		}
+	}
+},
+  "Parameters": {
+    "ESDomainName": {
+      "Type": "String",
+      "Default": "mysearchdomain",
+      "Description": "Name of the Elasticsearch Domain (cluster) you want to create/update",
+      "AllowedPattern": "[a-z][a-z0-9\\-]+"
+    },
+    "ESDomainDataInstanceCount": {
+      "Type": "Number",
+      "Default": "2",
+      "Description": "Number of data nodes for the Elasticsearch Domain. Enter an even number"
+    },
+    "ESDomainDataInstanceVolume": {
+      "Type": "Number",
+      "Default": "100",
+      "Description": "Size (GB) per data node. Total cluster size will be (volume size x node count)"
+    },
+    "ESDomainMasterInstanceCount": {
+      "Type": "Number",
+      "Default": "2",
+      "Description": "Number of dedicated mater nodes for the Elasticsearch Domain"
+    },
+    "ESDomainDataInstanceType": {
+      "Type": "String",
+      "Description": "Instance Type for data nodes of the Elasticsearch Domain",
+      "Default": "m3.medium.elasticsearch",
+      "AllowedValues": [
+        "m3.medium.elasticsearch",
+        "m3.large.elasticsearch",
+        "m3.xlarge.elasticsearch",
+        "m3.2xlarge.elasticsearch",
+        "m4.medium.elasticsearch",
+        "m4.large.elasticsearch",
+        "m4.xlarge.elasticsearch",
+        "m4.2xlarge.elasticsearch",
+        "m4.4xlarge.elasticsearch",
+        "m4.10xlarge.elasticsearch",
+        "r3.large.elasticsearch",
+        "r3.xlarge.elasticsearch",
+        "r3.2xlarge.elasticsearch",
+        "r3.4xlarge.elasticsearch",
+        "r3.8xlarge.elasticsearch",
+        "r4.large.elasticsearch",
+        "r4.xlarge.elasticsearch",
+        "r4.2xlarge.elasticsearch",
+        "r4.4xlarge.elasticsearch",
+        "r4.8xlarge.elasticsearch",
+        "r4.16xlarge.elasticsearch",
+        "i2.xlarge.elasticsearch",
+        "i2.2xlarge.elasticsearch"
+      ]
+    },
+    "ESDomainMasterInstanceType": {
+      "Type": "String",
+      "Description": "Instance Type for master nodes of the Elasticsearch Domain",
+      "Default": "m3.medium.elasticsearch",
+      "AllowedValues": [
+        "m3.medium.elasticsearch",
+        "m3.large.elasticsearch",
+        "m3.xlarge.elasticsearch",
+        "m3.2xlarge.elasticsearch",
+        "m4.medium.elasticsearch",
+        "m4.large.elasticsearch",
+        "m4.xlarge.elasticsearch",
+        "m4.2xlarge.elasticsearch",
+        "m4.4xlarge.elasticsearch",
+        "m4.10xlarge.elasticsearch",
+        "r3.large.elasticsearch",
+        "r3.xlarge.elasticsearch",
+        "r3.2xlarge.elasticsearch",
+        "r3.4xlarge.elasticsearch",
+        "r3.8xlarge.elasticsearch",
+        "r4.large.elasticsearch",
+        "r4.xlarge.elasticsearch",
+        "r4.2xlarge.elasticsearch",
+        "r4.4xlarge.elasticsearch",
+        "r4.8xlarge.elasticsearch",
+        "r4.16xlarge.elasticsearch",
+        "i2.xlarge.elasticsearch",
+        "i2.2xlarge.elasticsearch"
+      ]
+    },
+    "ESDomainAllowExplicitIndex": {
+      "Description":"Advanced Option rest.action.multi.allow_explicit_index that controls if Elasticsearch will accept/reject requests with an explicit index specified in the request body",
+      "Type":"String",
+      "Default":"true",
+      "AllowedValues":["true","false"]
+    },
+    "GroupPrefix": {
+      "Description": "Prefix for AWS Elasticsearch LDAP/AD Groups",
+      "Type": "String",
+      "Default":"AWSES"
+    },
+    "LDAPServer": {
+      "Description": "LDAP/AD Hostname/IP for Authentication (with protocol and port number)",
+      "Type": "String",
+      "Default":"ldaps://ldap.example.com:636"
+    },
+    "BindPassword": {
+      "NoEcho": "true",
+      "Description": "LDAP/AD Service DN Password. Must be min 8 characters. IMPORTANT: Replace & character(s) with \\&",
+      "Type": "String",
+      "MinLength": "8",
+      "MaxLength": "41"
+    },
+    "BaseDN": {
+      "Description": "LDAP/AD Base DN for user and group searches",
+      "Type": "String",
+      "Default": "DC=corp,DC=example,DC=com"
+    },
+    "BindDN": {
+      "Description": "LDAP/AD Bind DN for search queries",
+      "Type": "String",
+      "Default":"CN=Admin,OU=Users,OU=EXAMPLE,DC=corp,DC=example,DC=com"
+    },
+    "KeyPairName": {
+      "Type": "AWS::EC2::KeyPair::KeyName",
+      "Description": "SSH keypair for Nginx Proxy",
+      "ConstraintDescription": "Must be a valid existing EC2 keypair",
+      "Default": "None"
+    },
+    "VpcId": {
+      "Type": "AWS::EC2::VPC::Id",
+      "Description": "VPC ID for Nginx Reverse Proxy"
+    },
+    "SSHCIDR": {
+      "Type": "String",
+      "Description": "CIDR range for incoming SSH access to the Nginx Reverse Proxy",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    },
+    "VpcCIDR": {
+      "Type": "String",
+      "Description": "VPC CIDR range for incoming web requests to the Nginx Reverse Proxy",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    },
+    "OnPremisesCIDR": {
+      "Type": "String",
+      "Description": "Corporate Network CIDR Range for incoming web requests to the Nginx Reverse Proxy",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})"
+    },
+    "PublicSubnet": {
+      "Type": "AWS::EC2::Subnet::Id",
+      "Description": "Public Subnet for Nginx Reverse Proxy"
+    },
+    "InstanceType": {
+      "Type": "String",
+      "Description": "Amazon EC2 instance type for the Nginx Reverse Proxy Instance",
+      "Default": "m3.medium",
+      "AllowedValues": [
+        "t2.micro",
+        "t2.small",
+        "t2.medium",
+        "t2.large",
+        "m3.medium",
+        "m3.large"
+      ]
+    },
+    "NginxServerPortHTTP" : {
+      "Description": "Nginx Reverse Proxy Port for HTTP requests",
+      "Type": "String",
+      "Default": "9200"
+    },
+    "NginxServerPortHTTPS" : {
+      "Description": "Nginx Reverse Proxy Port for HTTPS requests",
+      "Type": "String",
+      "Default": "443"
+    }
+  },
+  "Conditions": {
+    "AttachKeyPair": {
+			"Fn::Not": [{
+				"Fn::Equals": [{
+					"Ref": "KeyPairName"
+				}, "None"]
+			}]
+		}
+  },
+  "Resources": {
+    "ESDomain": {
+      "DependsOn":["NginxElasticIP"],
+      "Type": "AWS::Elasticsearch::Domain",
+      "Properties": {
+        "DomainName": {"Ref":"ESDomainName"},
+        "ElasticsearchClusterConfig": {
+          "DedicatedMasterEnabled": "true",
+          "InstanceCount": {"Ref":"ESDomainDataInstanceCount"},
+          "ZoneAwarenessEnabled": "true",
+          "InstanceType": {"Ref":"ESDomainDataInstanceType"},
+          "DedicatedMasterType": {"Ref":"ESDomainMasterInstanceType"},
+          "DedicatedMasterCount": {"Ref":"ESDomainMasterInstanceCount"}
+        },
+        "EBSOptions": {
+          "EBSEnabled": true,
+          "Iops": 0,
+          "VolumeSize": {"Ref":"ESDomainDataInstanceVolume"},
+          "VolumeType": "gp2"
+        },
+        "SnapshotOptions": {
+          "AutomatedSnapshotStartHour": "0"
+        },
+        "Tags":[
+          {"Key":"Name", "Value":{"Ref":"ESDomainName"}}
+        ],
+        "ElasticsearchVersion":"5.3",
+        "AccessPolicies": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "*"
+              },
+            "Action": "es:*",
+            "Condition": {"IpAddress":{"aws:SourceIp":[{"Ref":"NginxElasticIP"}]}}
+            }
+          ]
+        },
+        "AdvancedOptions": {
+          "rest.action.multi.allow_explicit_index": {"Ref":"ESDomainAllowExplicitIndex"}
+        }
+      }
+    },
+    "NginxInstanceProfile": {
+      "DependsOn":["NginxGatewayRole"],
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "Roles": [{
+          "Ref": "NginxGatewayRole"
+        }],
+        "Path": "/"
+      }
+    },
+    "ESDomainAdminRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "Admin"]]},
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {"Ref":"AWS::AccountId"}
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+        },
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "Admin","Policy"]]},
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                    "Effect": "Allow",
+                    "Action": ["es:*"],
+                    "Resource":{"Fn::Join":["",[{"Fn::GetAtt":["ESDomain","DomainArn"]},"/*"]]}
+                  } ]
+               }
+               } ]
+        }
+    },
+    "ESDomainDataLoaderRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "DataLoader"]]},
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {"Ref":"AWS::AccountId"}
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+        },
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "DataLoader","Policy"]]},
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                    "Effect": "Allow",
+                    "Action": ["es:ESHttpGet","es:ESHttpPut","es:ESHttpPost"],
+                    "Resource":{"Fn::Join":["",[{"Fn::GetAtt":["ESDomain","DomainArn"]},"/*"]]}
+                  } ]
+               }
+               } ]
+        }
+    },
+    "ESDomainUserRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "User"]]},
+        "AssumeRolePolicyDocument": {
+            "Version": "2012-10-17",
+            "Statement": [
+              {
+                "Effect": "Allow",
+                "Principal": {
+                  "AWS": {"Ref":"AWS::AccountId"}
+                },
+                "Action": "sts:AssumeRole"
+              }
+            ]
+        },
+        "Path": "/",
+        "Policies": [ {
+               "PolicyName": {"Fn::Join": ["", [{"Ref": "GroupPrefix"}, "User","Policy"]]},
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                    "Effect": "Allow",
+                    "Action": ["es:ESHttpGet"],
+                    "Resource":{"Fn::Join":["",[{"Fn::GetAtt":["ESDomain","DomainArn"]},"/*"]]}
+                  } ]
+               }
+               } ]
+        }
+    },
+    "NginxGatewayRole": {
+      "DependsOn":["ESDomain"],
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "AssumeRolePolicyDocument": {
+          "Statement": [{
+            "Action": ["sts:AssumeRole"],
+            "Effect": "Allow",
+            "Principal": {
+              "Service": ["ec2.amazonaws.com"]
+            }
+          }],
+          "Version": "2012-10-17"
+        },
+        "Path": "/",
+        "Policies": [{
+          "PolicyDocument": {
+            "Statement": [{
+              "Effect": "Allow",
+              "Action": [
+                "es:*"
+              ],
+              "Resource": [
+                {"Fn::Join":["",[{"Fn::GetAtt":["ESDomain","DomainArn"]},"/*"]]}
+              ]
+            }, {
+              "Effect": "Allow",
+              "Action": [
+                "iam:GetRole",
+                "iam:Simulate*"
+              ],
+              "Resource": {"Fn::Join":["",["arn:aws:iam::",{"Ref":"AWS::AccountId"},":role/",{"Ref":"GroupPrefix"},"*"]]}
+            }],
+            "Version": "2012-10-17"
+          },
+          "PolicyName": "NginxGateway-policy"
+        }]
+      }
+    },
+    "NginxInstanceSG": {
+      "Properties": {
+        "GroupDescription": "Security Group for Nginx Reverse Proxy Instance",
+        "VpcId": {
+          "Ref": "VpcId"
+        },
+        "Tags": [{
+          "Key": "Name",
+          "Value": {"Fn::Join":["-",[{"Ref":"ESDomainName"},"nginxproxy","SG"]]}
+        }]
+      },
+      "Type": "AWS::EC2::SecurityGroup"
+    },
+    "SGIngressRule01": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Fn::GetAtt": ["NginxInstanceSG", "GroupId"]
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "22",
+        "ToPort": "22",
+        "CidrIp": {
+          "Ref": "SSHCIDR"
+        }
+      }
+    },
+    "SGIngressRule02": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Fn::GetAtt": ["NginxInstanceSG", "GroupId"]
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "9200",
+        "ToPort": "9200",
+        "CidrIp": {
+          "Ref": "VpcCIDR"
+        }
+      }
+    },
+    "SGIngressRule03": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Fn::GetAtt": ["NginxInstanceSG", "GroupId"]
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "9200",
+        "ToPort": "9200",
+        "CidrIp": {
+          "Ref": "OnPremisesCIDR"
+        }
+      }
+    },
+    "SGIngressRule04": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Fn::GetAtt": ["NginxInstanceSG", "GroupId"]
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "443",
+        "ToPort": "443",
+        "CidrIp": {
+          "Ref": "VpcCIDR"
+        }
+      }
+    },
+    "SGIngressRule05": {
+      "Type": "AWS::EC2::SecurityGroupIngress",
+      "Properties": {
+        "GroupId": {
+          "Fn::GetAtt": ["NginxInstanceSG", "GroupId"]
+        },
+        "IpProtocol": "tcp",
+        "FromPort": "443",
+        "ToPort": "443",
+        "CidrIp": {
+          "Ref": "OnPremisesCIDR"
+        }
+      }
+    },
+    "NginxInstance": {
+      "Type": "AWS::EC2::Instance",
+      "Properties": {
+        "ImageId": {"Fn::FindInMap" : [ "RegionMap", { "Ref" : "AWS::Region" }, "AMI"]},
+        "IamInstanceProfile": {
+          "Ref": "NginxInstanceProfile"
+        },
+        "InstanceType": {
+          "Ref": "InstanceType"
+        },
+        "KeyName": {
+          "Fn::If": [
+            "AttachKeyPair", {
+              "Ref": "KeyPairName"
+            }, {
+              "Ref": "AWS::NoValue"
+            }
+          ]
+        },
+        "Tags": [
+          {"Key":"Name", "Value":{"Fn::Join":["-",[{"Ref":"ESDomainName"},"nginxproxy"]]}}
+        ],
+        "NetworkInterfaces":[{
+          "AssociatePublicIpAddress" : "true",
+          "DeleteOnTermination" : "true",
+          "DeviceIndex" : "0",
+          "GroupSet" : [{"Fn::GetAtt": ["NginxInstanceSG", "GroupId"]}],
+          "SubnetId" : {"Ref":"PublicSubnet"}
+        }],
+        "UserData": {
+          "Fn::Base64": {
+            "Fn::Join": [
+              "", [
+                "#!/bin/bash -xe \n",
+                "yum update -y \n",
+                "wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/elasticsearch-nginx-proxy.sh -P /tmp/","\n",
+                "chmod u+x /tmp/elasticsearch-nginx-proxy.sh","\n",
+                "./tmp/elasticsearch-nginx-proxy.sh ",
+                          {"Fn::GetAtt" : ["ESDomain","DomainEndpoint"]}," ",
+                          {"Ref"        : "BaseDN"}," ",
+                          {"Ref"        : "LDAPServer"}," ",
+                          {"Ref"        : "BindDN"}," ",
+                          {"Ref"        : "BindPassword"}," ",
+                          {"Ref"        : "NginxServerPortHTTP"}," ",
+                          {"Ref"        : "NginxServerPortHTTPS"}," ",
+                          {"Fn::GetAtt" : ["ESDomain","DomainArn"]}," ",
+                          {"Ref"        :  "GroupPrefix"},"\n",
+                "# Signal the status from cfn-init\n",
+                "/opt/aws/bin/cfn-signal -e $? ",
+                "         --stack ", { "Ref" : "AWS::StackName" },
+                "         --resource NginxInstance ",
+                "         --region ", { "Ref" : "AWS::Region" }, "\n"
+              ]
+            ]
+          }
+        }
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT10M"
+        }
+      }
+    },
+    "RecoverInstance": {
+      "Properties": {
+        "ActionsEnabled": "true",
+        "AlarmActions": [{
+          "Fn::Join": [
+            "", ["arn:aws:automate:", {
+              "Ref": "AWS::Region"
+            }, ":ec2:recover"]
+          ]
+        }],
+        "AlarmDescription": {
+          "Fn::Join": [
+            "", ["Recover the Nginx Proxy Instance (", {
+              "Ref": "NginxInstance"
+            }, ")"]
+          ]
+        },
+        "AlarmName": {
+          "Fn::Join": ["", [{
+            "Ref": "NginxInstance"
+          }, "-recover-alarm"]]
+        },
+        "ComparisonOperator": "GreaterThanThreshold",
+        "Dimensions": [{
+          "Name": "InstanceId",
+          "Value": {
+            "Ref": "NginxInstance"
+          }
+        }],
+        "EvaluationPeriods": "2",
+        "MetricName": "StatusCheckFailed_System",
+        "Namespace": "AWS/EC2",
+        "Period": "60",
+        "Statistic": "Average",
+        "Threshold": "0"
+      },
+      "Type": "AWS::CloudWatch::Alarm"
+    },
+
+    "NginxElasticIP": {
+      "Type" : "AWS::EC2::EIP",
+      "Properties" : {
+        "Domain" : "vpc"
+      }
+    },
+    "NginxElasticIPAssocication":{
+      "Type": "AWS::EC2::EIPAssociation",
+      "Properties": {
+          "AllocationId": {"Fn::GetAtt":["NginxElasticIP","AllocationId"]},
+          "InstanceId": {"Ref":"NginxInstance"}
+      }
+    }
+  },
+  "Outputs": {
+    "ESDomainArn": {
+      "Description": "ElasticSearch Domain's ARN",
+      "Value": {
+        "Fn::GetAtt": [
+          "ESDomain",
+          "DomainArn"
+        ]
+      }
+    },
+    "ESProxyEndpoints": {
+			"Description": "Elasticsearch Domain Proxy Endpoints (HTTP & HTTPS)",
+			"Value": {"Fn::Join":["",[
+        "http://",
+        {
+          "Fn::GetAtt": [
+            "NginxInstance", "PrivateIp"
+          ]
+        },
+        ":",
+        {"Ref":"NginxServerPortHTTP"},
+        ", https://",
+        {
+          "Fn::GetAtt": [
+            "NginxInstance", "PrivateIp"
+          ]
+        },
+        ":",
+        {"Ref":"NginxServerPortHTTPS"}
+        ]]}
+		},
+    "ESKibanaProxyEndpoint": {
+			"Description": "Kibana Proxy Endpoints (HTTP & HTTPS)",
+			"Value": {"Fn::Join":["",[
+        "http://",
+        {
+          "Fn::GetAtt": [
+            "NginxInstance", "PrivateIp"
+          ]
+        },
+        ":",
+        {"Ref":"NginxServerPortHTTP"},
+        "/_plugin/kibana/, https://",
+        {
+          "Fn::GetAtt": [
+            "NginxInstance", "PrivateIp"
+          ]
+        },
+        ":",
+        {"Ref":"NginxServerPortHTTPS"},
+        "/_plugin/kibana/"
+        ]]}
+		}
+  }
+}
