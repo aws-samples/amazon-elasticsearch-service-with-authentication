@@ -1,4 +1,3 @@
-
 #!/bin/sh
 yum install -y perl gcc autoconf automake make gcc-c++ libxml2-devel libcap-devel libtool libtool-ltdl-devel openssl openssl-devel python-devel openldap-devel
 pip install boto3
@@ -25,7 +24,7 @@ cd nginx-1.13.5
 make
 make install
 cd /tmp
-wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/nginx-elasticsearch.conf
+wget https://github.com/aws-samples/amazon-elasticsearch-service-with-authentication/raw/master/nginx-elasticsearch.conf
 yes |  cp -rf nginx-elasticsearch.conf /etc/nginx/nginx.conf
 sed -ie "s/ELASTICSEARCHURL/$1/g" /etc/nginx/nginx.conf
 sed -ie "s/BASEDN/$2/g" /etc/nginx/nginx.conf
@@ -36,9 +35,9 @@ sed -ie "s/LISTENER_SERVER_PORT_1/$6/g" /etc/nginx/nginx.conf
 sed -ie "s/LISTENER_SERVER_PORT_2/$7/g" /etc/nginx/nginx.conf
 sed -ie "s@ELASTICSEARCHARN@$8@g" /etc/nginx/nginx.conf
 sed -ie "s/ADGROUPPREFIX/$9/g" /etc/nginx/nginx.conf
-wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/nginx.sh -O /etc/init.d/nginx
-wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/nginx-ldap-auth-daemon.py -P /etc/nginx/nginx-ldap-auth/
-wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/nginx-ldap-auth-daemon.sh -O /etc/init.d/nginx-ldap-auth-daemon
+wget https://github.com/aws-samples/amazon-elasticsearch-service-with-authentication/raw/master/nginx.sh -O /etc/init.d/nginx
+wget https://github.com/aws-samples/amazon-elasticsearch-service-with-authentication/raw/master/nginx-ldap-auth-daemon.py -P /etc/nginx/nginx-ldap-auth/
+wget https://github.com/aws-samples/amazon-elasticsearch-service-with-authentication/raw/master/nginx-ldap-auth-daemon.sh -O /etc/init.d/nginx-ldap-auth-daemon
 chmod +x /etc/init.d/nginx
 chmod +x /etc/init.d/nginx-ldap-auth-daemon
 chkconfig nginx-ldap-auth-daemon on

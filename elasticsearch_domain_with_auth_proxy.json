@@ -636,7 +636,7 @@
               "", [
                 "#!/bin/bash -xe \n",
                 "yum update -y \n",
-                "wget https://s3-ap-southeast-2.amazonaws.com/juzerali-nginx-repo/elasticsearch-nginx-proxy.sh -P /tmp/","\n",
+                "wget https://github.com/aws-samples/amazon-elasticsearch-service-with-authentication/raw/master/elasticsearch-nginx-proxy.sh -P /tmp/","\n",
                 "chmod u+x /tmp/elasticsearch-nginx-proxy.sh","\n",
                 "./tmp/elasticsearch-nginx-proxy.sh ",
                           {"Fn::GetAtt" : ["ESDomain","DomainEndpoint"]}," ",
